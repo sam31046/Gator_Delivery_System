@@ -124,8 +124,8 @@ class AVL_Tree(object):
 
     def search(self, root, key):
         x = root
-        while x is not None and key != x.key:
-            if key < x.key:
+        while x is not None and key != x.val:
+            if key < x.val:
                 x = x.left
             else:
                 x = x.right
@@ -185,14 +185,15 @@ class AVL_Tree(object):
 
         return self.getMinValueNode(root.left)
 
-    def preOrder(self, root):
+    def preOrder(self, root, tmp_list=[]):
 
         if not root:
-            return
-
-        print("{0} ".format(root.val), end="")
-        self.preOrder(root.left)
-        self.preOrder(root.right)
+            print(tmp_list)
+            return tmp_list
+        tmp_list.append(root.val)
+        # print("{0} ".format(root.val), end="")
+        self.preOrder(root.left, tmp_list)
+        self.preOrder(root.right, tmp_list)
 
     def printHelper(self, currPtr, indent, last):
         if currPtr is not None:
