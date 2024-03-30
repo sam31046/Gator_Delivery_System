@@ -27,6 +27,7 @@ class OrderManagementSystem(AVL_Tree):
         # 更新系统时间和交付时间
         self.current_time = current_system_time
         self.delivery_time = delivery_time
+        order_delivered = self.get_delivered()
 
         # 创建新订单
         new_order = Order(order_id, current_system_time,
@@ -38,23 +39,23 @@ class OrderManagementSystem(AVL_Tree):
         if not larger_node:  # first order
             if self.return_time < current_system_time:
                 new_order.ETA = current_system_time + delivery_time
-                self.return_time = current_system_time  # 更新返回时间为当前系统时间
+                # self.return_time = current_system_time  # 更新返回时间为当前系统时间
             else:
                 new_order.ETA = self.return_time + delivery_time
         else:
             new_order.ETA = larger_node.ETA + larger_node.delivery_time\
-                            + delivery_time
+                            + new_order.delivery_time
 
         # 更新最后一个订单的送达时间和返回时间
-        self.last_delivery_time = new_order.ETA
-        self.return_time = current_system_time \
-            if self.return_time < current_system_time else self.return_time
+        # self.last_delivery_time = new_order.ETA
+        # self.return_time = current_system_time \
+        #     if self.return_time < current_system_time else self.return_time
 
         # 打印ETA
-        print(f"Order {order_id} has been created - ETA: {new_order.ETA}")
+        print(f"Order {new_order.order_id} has been created - ETA: {new_order.ETA}")
         self.order_count += 1
-        self.check_for_order_updates(order_id)
-        self.print_delivered(self.get_delivered())
+        self.check_for_order_updates(new_order.order_id)
+        self.print_delivered(order_delivered)
 
     # 检查是否有订单更新
     def check_for_order_updates(self, order_id):
@@ -88,6 +89,7 @@ class OrderManagementSystem(AVL_Tree):
             print(s)
 
     def cancel_order(self, order_id, current_system_time):
+        self.current_time = current_system_time
         order_delivered = self.get_delivered()
         order_list = self.inOrder(self.root)
         found = False
@@ -107,19 +109,19 @@ class OrderManagementSystem(AVL_Tree):
             if order_departure_moment < current_system_time:
                 print(f"Cannot cancel. Order {order_id} is out for delivery.")
             else:
-                if key+1 != len(order_list):
-                    updated_order = []
+                updated_order = []
+                if key+1 == len(order_list):
+                  pass
                 # if the cancelled order was the last order
                 # no other order need to be updated
-                if key == 0:
+                elif key == 0:
                     # if the cancelled order was originally the next order
                     # and there are at least one order after canceling
 
                     sec_o = key + 1
                     # decided by the returning time of the delivery agent
                     # Become new first order
-                    order_list[sec_o].ETA = self.last_delivery_time + \
-                                            self.last_comeback + \
+                    order_list[sec_o].ETA = self.return_time + \
                                             order_list[sec_o].delivery_time
                     updated_order.append(order_list[sec_o])
                     # Update ETA of subsequent orders after second one
@@ -169,6 +171,7 @@ class OrderManagementSystem(AVL_Tree):
         return count
 
     def update_time(self, order_id, current_system_time, new_delivery_time):
+        self.current_time = current_system_time
         order_delivered = self.get_delivered()
         order_list = self.inOrder(self.root)
         found = False
@@ -227,8 +230,8 @@ class OrderManagementSystem(AVL_Tree):
                 node_list = self.get_path(self.root, kwargs[key])
                 print(f"[{node_list[0].order_id},"
                       f" {node_list[0].current_system_time},"
-                      f" {node_list[0].orderValue},"
-                      f" {node_list[0].deliveryTime},"
+                      f" {node_list[0].order_value},"
+                      f" {node_list[0].delivery_time},"
                       f" {node_list[0].ETA} ]")
                 return
             if key == "time1":
@@ -266,6 +269,7 @@ class OrderManagementSystem(AVL_Tree):
                 delivered_list.append(order)
                 # self.last_delivery_time = order.ETA
                 # self.last_comeback = self.delivery_time
+                self.return_time = order.ETA + order.delivery_time
                 self.root = self.delete(self.root, order.priority)
             else:
                 break
@@ -354,7 +358,7 @@ class OrderManagementSystem(AVL_Tree):
         return root
 
 
-def test():
+def _case():
     # Example usage:
     oms = OrderManagementSystem()
 
@@ -380,14 +384,68 @@ def test():
     # oms.quit()
 
     # Example 1
-    oms.create_order(1001, 1, 200, 3)
-    oms.create_order(1002, 3, 250, 6)
-    oms.create_order(1003, 8, 100, 3)
-    oms.create_order(1004, 13, 100, 5)
+    # oms.create_order(1001, 1, 200, 3)
+    # oms.create_order(1002, 3, 250, 6)
+    # oms.create_order(1003, 8, 100, 3)
+    # oms.create_order(1004, 13, 100, 5)
+    # oms.print_within_time(time1=2, time2=15)
+    # oms.update_time(1003, 15, 1)
+    # oms.create_order(1005, 30, 300, 3)
+    # oms.quit
+
+    # Testcase 3
+    oms.create_order(4001, 1, 200, 3)
+    oms.create_order(4002, 3, 250, 6)
+    oms.create_order(4003, 8, 100, 3)
+    oms.create_order(4004, 13, 100, 5)
     oms.print_within_time(time1=2, time2=15)
-    oms.update_time(1003, 15, 1)
-    oms.create_order(1005, 30, 300, 3)
+    oms.get_rank_of_order(4003)
+    oms.update_time(4003, 15, 2)
+    oms.create_order(4005, 17, 150, 4)
+    oms.cancel_order(4002, 20)
+    oms.create_order(4006, 22, 300, 3)
+    oms.print_within_time(time1=10, time2=25)
+    oms.create_order(4007, 25, 200, 2)
+    oms.create_order(4008, 28, 350, 5)
+    oms.print_within_time(time1=20, time2=30)
+    oms.get_rank_of_order(4006)
+    oms.create_order(4009, 32, 250, 3)
+    oms.cancel_order(4004, 34)
+    oms.update_time(4005, 37, 5)
+    oms.create_order(4010, 40, 400, 6)
+    oms.print_within_time(time1=35, time2=45)
+    oms.get_rank_of_order(4007)
+    oms.create_order(4011, 40, 200, 4)
+    oms.create_order(4012, 42, 300, 3)
+    oms.print_within_time(time1=50, time2=55)
+    oms.update_time(4010, 55, 7)
+    oms.cancel_order(4009, 56)
+    oms.print_within_time(time1=60, time2=90)
     oms.quit()
+
+    # Testcase 2
+    # oms.create_order(3001, 1, 200, 7)
+    # oms.create_order(3002, 3, 250, 6)
+    # oms.create_order(3003, 8, 1000, 3)
+    # oms.create_order(3004, 13, 100, 5)
+    # oms.create_order(3005, 15, 300, 4)
+    # oms.create_order(3006, 17, 800, 2)
+    # oms.print_within_time(time1=2, time2=20)
+    # oms.update_time(3004, 20, 2)
+    # oms.print_within_time(time1=5, time2=25)
+    # oms.cancel_order(3005, 25)
+    # oms.print_within_time(time1=10, time2=30)
+    # oms.create_order(3007, 30, 200, 3)
+    # oms.get_rank_of_order(3005)
+    # oms.create_order(3008, 33, 250, 6)
+    # oms.create_order(3009, 38, 100, 3)
+    # oms.create_order(3010, 40, 4000, 5)
+    # oms.get_rank_of_order(3008)
+    # oms.create_order(3011, 45, 300, 4)
+    # oms.create_order(3012, 47, 150, 2)
+    # oms.print_within_time(time1=35, time2=50)
+    # oms.get_rank_of_order(3006)
+    # oms.quit()
 
 
 def read_file(file_path):
@@ -447,3 +505,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    # _case()
