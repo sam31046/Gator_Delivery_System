@@ -32,14 +32,24 @@ class OrderManagementSystem(AVL_Tree):
         # 创建新订单
         new_order = Order(order_id, current_system_time,
                           order_value, delivery_time)
+
+        order_list = self.inOrder(self.root)
+        if order_list is not None:
+            first_order = order_list[0]
+            if (new_order.priority > first_order.priority) and (
+                    (first_order.ETA - first_order.delivery_time)
+                    <= current_system_time):
+                first_order.priority = 100
+
         # 将新订单插入到AVL树中
         self.root = self.insert(self.root, new_order)
         # 计算ETA
         larger_node = self.get_near_large_node(self.root, order_id)
-        if not larger_node:  # first order
+        if not larger_node:# and self.order_count == 0:  # first order
             if self.return_time < current_system_time:
                 new_order.ETA = current_system_time + delivery_time
-                # self.return_time = current_system_time  # 更新返回时间为当前系统时间
+                # if self.order_count == 0:
+                #     self.return_time = current_system_time  # 更新返回时间为当前系统时间
             else:
                 new_order.ETA = self.return_time + delivery_time
         else:
@@ -232,7 +242,7 @@ class OrderManagementSystem(AVL_Tree):
                       f" {node_list[0].current_system_time},"
                       f" {node_list[0].order_value},"
                       f" {node_list[0].delivery_time},"
-                      f" {node_list[0].ETA} ]")
+                      f" {node_list[0].ETA}]")
                 return
             if key == "time1":
                 time1 = kwargs[key]
@@ -285,6 +295,7 @@ class OrderManagementSystem(AVL_Tree):
                 print(f"Order {order.order_id} has been delivered at time "
                       f"{order.ETA}")
 
+
     def quit(self, tmp_list=None):
         if tmp_list is None:
             tmp_list = []
@@ -292,6 +303,7 @@ class OrderManagementSystem(AVL_Tree):
         for order in range(len(tmp_list)):
             print(f"Order {tmp_list[order].order_id} "
                   f"has been delivered at time {tmp_list[order].ETA}")
+
 
     def delete(self, root, priority):
 
@@ -362,6 +374,27 @@ def _case():
     # Example usage:
     oms = OrderManagementSystem()
 
+    # Example 1
+    # oms.create_order(1001, 1, 200, 3)
+    # oms.create_order(1002, 3, 250, 6)
+    # oms.create_order(1003, 8, 100, 3)
+    # oms.create_order(1004, 13, 100, 5)
+    # oms.print_within_time(time1=2, time2=15)
+    # oms.update_time(1003, 15, 1)
+    # oms.create_order(1005, 30, 300, 3)
+    # oms.quit()
+
+    # Example 2
+    # oms.create_order(101, 2, 300, 4)
+    # oms.create_order(102, 3, 600, 3)
+    # oms.print_within_time(order_id=101)
+    # oms.create_order(103, 7, 200, 2)
+    # oms.create_order(104, 8, 500, 3)
+    # oms.cancel_order(102, 9)
+    # oms.create_order(105, 10, 300, 4)
+    # oms.get_rank_of_order(105)
+    # oms.quit()
+
     # Testcase 1
     # oms.create_order(1001, 1, 100, 4)
     # oms.create_order(1002, 2, 150, 7)
@@ -383,45 +416,35 @@ def _case():
     # oms.create_order(1010, 40, 250, 10)
     # oms.quit()
 
-    # Example 1
-    # oms.create_order(1001, 1, 200, 3)
-    # oms.create_order(1002, 3, 250, 6)
-    # oms.create_order(1003, 8, 100, 3)
-    # oms.create_order(1004, 13, 100, 5)
-    # oms.print_within_time(time1=2, time2=15)
-    # oms.update_time(1003, 15, 1)
-    # oms.create_order(1005, 30, 300, 3)
-    # oms.quit
-
     # Testcase 3
-    oms.create_order(4001, 1, 200, 3)
-    oms.create_order(4002, 3, 250, 6)
-    oms.create_order(4003, 8, 100, 3)
-    oms.create_order(4004, 13, 100, 5)
-    oms.print_within_time(time1=2, time2=15)
-    oms.get_rank_of_order(4003)
-    oms.update_time(4003, 15, 2)
-    oms.create_order(4005, 17, 150, 4)
-    oms.cancel_order(4002, 20)
-    oms.create_order(4006, 22, 300, 3)
-    oms.print_within_time(time1=10, time2=25)
-    oms.create_order(4007, 25, 200, 2)
-    oms.create_order(4008, 28, 350, 5)
-    oms.print_within_time(time1=20, time2=30)
-    oms.get_rank_of_order(4006)
-    oms.create_order(4009, 32, 250, 3)
-    oms.cancel_order(4004, 34)
-    oms.update_time(4005, 37, 5)
-    oms.create_order(4010, 40, 400, 6)
-    oms.print_within_time(time1=35, time2=45)
-    oms.get_rank_of_order(4007)
-    oms.create_order(4011, 40, 200, 4)
-    oms.create_order(4012, 42, 300, 3)
-    oms.print_within_time(time1=50, time2=55)
-    oms.update_time(4010, 55, 7)
-    oms.cancel_order(4009, 56)
-    oms.print_within_time(time1=60, time2=90)
-    oms.quit()
+    # oms.create_order(4001, 1, 200, 3)
+    # oms.create_order(4002, 3, 250, 6)
+    # oms.create_order(4003, 8, 100, 3)
+    # oms.create_order(4004, 13, 100, 5)
+    # oms.print_within_time(time1=2, time2=15)
+    # oms.get_rank_of_order(4003)
+    # oms.update_time(4003, 15, 2)
+    # oms.create_order(4005, 17, 150, 4)
+    # oms.cancel_order(4002, 20)
+    # oms.create_order(4006, 22, 300, 3)
+    # oms.print_within_time(time1=10, time2=25)
+    # oms.create_order(4007, 25, 200, 2)
+    # oms.create_order(4008, 28, 350, 5)
+    # oms.print_within_time(time1=20, time2=30)
+    # oms.get_rank_of_order(4006)
+    # oms.create_order(4009, 32, 250, 3)
+    # oms.cancel_order(4004, 34)
+    # oms.update_time(4005, 37, 5)
+    # oms.create_order(4010, 40, 400, 6)
+    # oms.print_within_time(time1=35, time2=45)
+    # oms.get_rank_of_order(4007)
+    # oms.create_order(4011, 40, 200, 4)
+    # oms.create_order(4012, 42, 300, 3)
+    # oms.print_within_time(time1=50, time2=55)
+    # oms.update_time(4010, 55, 7)
+    # oms.cancel_order(4009, 56)
+    # oms.print_within_time(time1=60, time2=90)
+    # oms.quit()
 
     # Testcase 2
     # oms.create_order(3001, 1, 200, 7)
