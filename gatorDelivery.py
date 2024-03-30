@@ -111,50 +111,50 @@ class OrderManagementSystem(AVL_Tree):
                     updated_order = []
                 # if the cancelled order was the last order
                 # no other order need to be updated
-                    if key == 0:
-                        # if the cancelled order was originally the next order
-                        # and there are at least one order after canceling
+                if key == 0:
+                    # if the cancelled order was originally the next order
+                    # and there are at least one order after canceling
 
-                        sec_o = key + 1
-                        # decided by the returning time of the delivery agent
-                        # Become new first order
-                        order_list[sec_o].ETA = self.last_delivery_time + \
-                                                self.last_comeback + \
-                                                order_list[sec_o].delivery_time
-                        updated_order.append(order_list[sec_o])
-                        # Update ETA of subsequent orders after second one
-                        for i in range(sec_o + 1, len(order_list)):
-                            order_list[i].ETA = order_list[i - 1].ETA + \
-                                                order_list[i - 1].delivery_time + \
-                                                order_list[i].delivery_time
-                            updated_order.append(order_list[i])
+                    sec_o = key + 1
+                    # decided by the returning time of the delivery agent
+                    # Become new first order
+                    order_list[sec_o].ETA = self.last_delivery_time + \
+                                            self.last_comeback + \
+                                            order_list[sec_o].delivery_time
+                    updated_order.append(order_list[sec_o])
+                    # Update ETA of subsequent orders after second one
+                    for i in range(sec_o + 1, len(order_list)):
+                        order_list[i].ETA = order_list[i - 1].ETA + \
+                                            order_list[i - 1].delivery_time + \
+                                            order_list[i].delivery_time
+                        updated_order.append(order_list[i])
 
-                    else:
-                        # if the cancelled order was not the first order (has order before and after it)
-                        # Connect "the order before canceled one" with "the order after canceled one"
-                        order_list[key+1].ETA = order_list[key-1].ETA + \
-                                                order_list[key-1].delivery_time + \
-                                                order_list[key+1].delivery_time
-                        updated_order.append(order_list[key+1])
-                        # Update ETA of subsequent orders after those two order
-                        connect_two = key+1
-                        for i in range(connect_two + 1, len(order_list)):
-                            order_list[i].ETA = order_list[i - 1].ETA + \
-                                                order_list[i - 1].delivery_time + \
-                                                order_list[i].delivery_time
-                            updated_order.append(order_list[i])
+                else:
+                    # if the cancelled order was not the first order (has order before and after it)
+                    # Connect "the order before canceled one" with "the order after canceled one"
+                    order_list[key+1].ETA = order_list[key-1].ETA + \
+                                            order_list[key-1].delivery_time + \
+                                            order_list[key+1].delivery_time
+                    updated_order.append(order_list[key+1])
+                    # Update ETA of subsequent orders after those two order
+                    connect_two = key+1
+                    for i in range(connect_two + 1, len(order_list)):
+                        order_list[i].ETA = order_list[i - 1].ETA + \
+                                            order_list[i - 1].delivery_time + \
+                                            order_list[i].delivery_time
+                        updated_order.append(order_list[i])
 
-                    print(f"Order {order_id} has been canceled")
-                    if len(updated_order) != 0:
-                        s = "Updated ETAs: ["
-                        for j, order in enumerate(updated_order):
-                            s += str(order.order_id) + ":" + str(order.ETA)
-                            if j != len(updated_order) - 1:  # not last one
-                                s += ","
-                        s += "]"
-                        print(s)
-                    self.root = self.delete(self.root,
-                                            order_list[key].priority)
+                print(f"Order {order_id} has been canceled")
+                if len(updated_order) != 0:
+                    s = "Updated ETAs: ["
+                    for j, order in enumerate(updated_order):
+                        s += str(order.order_id) + ":" + str(order.ETA)
+                        if j != len(updated_order) - 1:  # not last one
+                            s += ","
+                    s += "]"
+                    print(s)
+                self.root = self.delete(self.root,
+                                        order_list[key].priority)
         self.print_delivered(order_delivered)
 
     def get_rank_of_order(self, order_id):
