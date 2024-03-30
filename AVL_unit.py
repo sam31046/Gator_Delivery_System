@@ -3,8 +3,16 @@ import sys
 
 # Generic tree node class
 class TreeNode(object):
-    def __init__(self, val):
-        self.val = val
+    def __init__(self, order_id, current_system_time,
+                 order_value, delivery_time):
+        self.order_id = order_id
+        self.current_system_time = current_system_time
+        self.order_value = order_value
+        self.delivery_time = delivery_time
+        self.ETA = None
+        self.priority = 0.3 * (self.order_value / 50) - \
+                        (0.7 * current_system_time)
+
         self.left = None
         self.right = None
         self.height = 1
@@ -16,15 +24,15 @@ class AVL_Tree(object):
     def __init__(self):
         self.root = None
 
-    def insert(self, root, key):
+    def insert(self, root, node):
 
         # Step 1 - Perform normal BST
         if not root:
-            return TreeNode(key)
-        elif key < root.val:
-            root.left = self.insert(root.left, key)
+            return node
+        elif node.priority < root.priority:
+            root.left = self.insert(root.left, node)
         else:
-            root.right = self.insert(root.right, key)
+            root.right = self.insert(root.right, node)
 
         # Step 2 - Update the height of the
         # ancestor node
@@ -37,99 +45,24 @@ class AVL_Tree(object):
         # Step 4 - If the node is unbalanced,
         # then try out the 4 cases
         # Case 1 - Left Left
-        if balance > 1 and key < root.left.val:
+        if balance > 1 and node.priority < root.left.priority:
             return self.rightRotate(root)
 
         # Case 2 - Right Right
-        if balance < -1 and key > root.right.val:
+        if balance < -1 and node.priority > root.right.priority:
             return self.leftRotate(root)
 
         # Case 3 - Left Right
-        if balance > 1 and key > root.left.val:
+        if balance > 1 and node.priority > root.left.priority:
             root.left = self.leftRotate(root.left)
             return self.rightRotate(root)
 
         # Case 4 - Right Left
-        if balance < -1 and key < root.right.val:
+        if balance < -1 and node.priority < root.right.priority:
             root.right = self.rightRotate(root.right)
             return self.leftRotate(root)
 
         return root
-
-    # Recursive function to delete a node with
-    # given key from subtree with given root.
-    # It returns root of the modified subtree.
-    def delete(self, root, key):
-
-        # Step 1 - Perform standard BST delete
-        if not root:
-            return root
-
-        elif key < root.val:
-            root.left = self.delete(root.left, key)
-
-        elif key > root.val:
-            root.right = self.delete(root.right, key)
-
-        else:
-            if root.left is None:
-                temp = root.right
-                root = None
-                return temp
-
-            elif root.right is None:
-                temp = root.left
-                root = None
-                return temp
-
-            temp = self.getMinValueNode(root.right)
-            root.val = temp.val
-            root.right = self.delete(root.right,
-                                     temp.val)
-
-        # If the tree has only one node,
-        # simply return it
-        if root is None:
-            return root
-
-        # Step 2 - Update the height of the
-        # ancestor node
-        root.height = 1 + max(self.getHeight(root.left),
-                              self.getHeight(root.right))
-
-        # Step 3 - Get the balance factor
-        balance = self.getBalance(root)
-
-        # Step 4 - If the node is unbalanced,
-        # then try out the 4 cases
-        # Case 1 - Left Left
-        if balance > 1 and self.getBalance(root.left) >= 0:
-            return self.rightRotate(root)
-
-        # Case 2 - Right Right
-        if balance < -1 and self.getBalance(root.right) <= 0:
-            return self.leftRotate(root)
-
-        # Case 3 - Left Right
-        if balance > 1 and self.getBalance(root.left) < 0:
-            root.left = self.leftRotate(root.left)
-            return self.rightRotate(root)
-
-        # Case 4 - Right Left
-        if balance < -1 and self.getBalance(root.right) > 0:
-            root.right = self.rightRotate(root.right)
-            return self.leftRotate(root)
-
-        return root
-
-    def search(self, root, key):
-        x = root
-        while x is not None and key != x.val:
-            if key < x.val:
-                x = x.left
-            else:
-                x = x.right
-        return x
 
     def leftRotate(self, z):
 
@@ -185,15 +118,60 @@ class AVL_Tree(object):
 
         return self.getMinValueNode(root.left)
 
-    def preOrder(self, root, tmp_list=[]):
-
+    def preOrder(self, root, tmp_list=None):
+        if tmp_list is None:
+            tmp_list = []
         if not root:
-            print(tmp_list)
-            return tmp_list
-        tmp_list.append(root.val)
-        # print("{0} ".format(root.val), end="")
+            return
+
         self.preOrder(root.left, tmp_list)
+        # print("{0} ".format(root.order_id), end="")
+        # print(root.order_id)
+        tmp_list.append(root)
         self.preOrder(root.right, tmp_list)
+        return tmp_list
+
+    def inOrder(self, root, tmp_list=None):
+        # in priority order, see insert
+        if tmp_list is None:
+            tmp_list = []
+        if not root:
+            return
+        self.inOrder(root.right, tmp_list)
+        tmp_list.append(root)
+        self.inOrder(root.left, tmp_list)
+        return tmp_list
+
+    def get_path(self, root, orderId):
+        # get the path from node to root
+        if root is None:
+            return []
+        if root.order_id == orderId:
+            return [root]
+
+        left_path = self.get_path(root.left, orderId)
+        if left_path:
+            left_path.append(root)
+            return left_path
+
+        right_path = self.get_path(root.right, orderId)
+        if right_path:
+            right_path.append(root)
+            return right_path
+
+        return []
+
+    def get_near_large_node(self, root, orderId):
+        path = self.get_path(root, orderId)
+        if path[0].right:
+            right = path[0].right
+            while right.left:
+                right = right.left
+            return right
+        for path_node in path:
+            if path_node.priority > path[0].priority:
+                # print(str(path_node.priority)+ " "+str (path[0].priority))
+                return path_node
 
     def printHelper(self, currPtr, indent, last):
         if currPtr is not None:
@@ -204,7 +182,7 @@ class AVL_Tree(object):
             else:
                 sys.stdout.write("L----")
                 indent += "|    "
-            print(currPtr.val)
+            print(currPtr.priority)
             self.printHelper(currPtr.left, indent, False)
             self.printHelper(currPtr.right, indent, True)
 
@@ -212,31 +190,37 @@ class AVL_Tree(object):
 if __name__ == "__main__":
     # For animation, check out:
     # https://www.cs.usfca.edu/~galles/visualization/AVLtree.html
-    myTree = AVL_Tree()
-    _root = None
-    nums = [9, 5, 10, 1, 6, 11, 0, 2, 3]
-    # nums = [10, 20, 30, 40, 50]
-
-    for num in nums:
-        _root = myTree.insert(_root, num)
-
-    # Preorder Traversal
-    print("Preorder Traversal after insertion -")
-    myTree.preOrder(_root)
-    print()
-    myTree.printHelper(_root, "", True)
-
-    # Delete
-    key = 10
-    # key = 30
-    root = myTree.delete(_root, key)
-
-
-    # Preorder Traversal
-    print("Preorder Traversal after deletion -")
-    myTree.preOrder(root)
-    print()
-    myTree.printHelper(root, "", True)
-
-
-# todo search need to test
+    pass
+    # myTree = AVL_Tree()
+    # _root = None
+    # nums = [9, 5, 10, 1, 6, 11, 0, 2, 3]
+    # # nums = [10, 20, 30, 40, 50]
+    #
+    # for order_id, num in enumerate(nums):
+    #     _root = myTree.insert(_root, order_id+100, num)
+    #
+    # # Preorder Traversal
+    # print(f"Preorder Traversal after insertion - {nums}")
+    # pre_order = myTree.preOrder(_root)
+    # in_order = myTree.inOrder(_root)
+    # array = []
+    # # in_order2 = myTree.getAllOrderInOrder(_root, array)
+    # # for i in array:
+    # #     print("---id:", i.order_id)
+    # print("pre order", pre_order)
+    # print("in order", in_order)
+    # # print("\n", in_order2)
+    # print()
+    # myTree.printHelper(_root, "", True)
+    #
+    # # Delete
+    # num = 10
+    # # num = 30
+    # root = myTree.delete(_root, num)
+    #
+    #
+    # # Preorder Traversal
+    # print(f"Preorder Traversal after deletion - {num}")
+    # myTree.preOrder(root)
+    # print()
+    # myTree.printHelper(root, "", True)

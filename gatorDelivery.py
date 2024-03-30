@@ -1,200 +1,449 @@
-from AVL_unit import AVL_Tree
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+from AVL_unit import AVL_Tree, TreeNode
+import argparse
+import re
+import sys
 
 
-class Order:
-    def __init__(self, order_id, current_system_time, order_value, delivery_time):
-        self.order_id = order_id
-        self.current_system_time = current_system_time
-        self.order_value = order_value
-        self.delivery_time = delivery_time
-        self.priority = self.calculate_priority()
-        self.ETA = 0  # 初始设为0，后续根据逻辑计算
+class Order(TreeNode):
+    def __init__(self, *args, **kwargs):
+        super(Order, self).__init__(*args, **kwargs)
 
-    def calculate_priority(self):
-        value_weight = 0.3
-        time_weight = 0.7
-        normalized_order_value = self.order_value / 50
-        return value_weight * normalized_order_value - time_weight * self.current_system_time
 
-class OrderManagementSystem:
+class OrderManagementSystem(AVL_Tree):
     def __init__(self):
-        self.orders_by_priority = AVL_Tree()  # 按优先级组织的AVL树
-        self.orders_by_eta = AVL_Tree()  # 按ETA组织的AVL树
+        super(OrderManagementSystem, self).__init__()
+        self.priority_tree = AVL_Tree()  # 按优先级组织的AVL树
         self.current_time = 0  # 系统当前时间，根据创建订单时更新
         self.last_delivery_time = 0  # 记录上一个订单的送达时间
         self.last_comeback = 0  # Last duration per trip, for comeback
         self.order_count = 0
-        self._root_pri = None
-        self._root_eta = None
+        self.delivery_time = 0
+        self.return_time = 0
 
-    def create_order(self, order_id, current_system_time, order_value, delivery_time):
-        """
-        :param order_id:
-        :param current_system_time:
-        :param order_value:
-        :param delivery_time: Time spend on delivery
-        :return:
-        """
-
-        # 更新系统时间
+    def create_order(self, order_id, current_system_time,
+                     order_value, delivery_time):
+        # 更新系统时间和交付时间
         self.current_time = current_system_time
-        # 创建新订单
-        new_order = Order(order_id, self.current_time, order_value, delivery_time)
-        # 计算ETA
-        if self.order_count == 0:  # The first order
-            new_order.ETA = self.current_time + delivery_time
-            self.last_comeback = delivery_time
-            # print("first")
-        else:
-            # Last ETA + Last comeback + Current delivery spend
-            new_order.ETA = self.last_delivery_time + self.last_comeback + delivery_time
-            self.last_comeback = delivery_time
+        self.delivery_time = delivery_time
 
-        # 更新最后一个订单的送达时间
-        self.last_delivery_time = new_order.ETA
+        # 创建新订单
+        new_order = Order(order_id, current_system_time,
+                          order_value, delivery_time)
         # 将新订单插入到AVL树中
-        self._root_pri = self.orders_by_priority.insert(self._root_pri,
-                                                 new_order.priority)
-        self._root_eta = self.orders_by_eta.insert(self._root_eta,
-                                            new_order.ETA)
+        self.root = self.insert(self.root, new_order)
+        # 计算ETA
+        larger_node = self.get_near_large_node(self.root, order_id)
+        if not larger_node:  # first order
+            if self.return_time < current_system_time:
+                new_order.ETA = current_system_time + delivery_time
+                self.return_time = current_system_time  # 更新返回时间为当前系统时间
+            else:
+                new_order.ETA = self.return_time + delivery_time
+        else:
+            new_order.ETA = larger_node.ETA + larger_node.delivery_time\
+                            + delivery_time
+
+        # 更新最后一个订单的送达时间和返回时间
+        self.last_delivery_time = new_order.ETA
+        self.return_time = current_system_time \
+            if self.return_time < current_system_time else self.return_time
+
         # 打印ETA
         print(f"Order {order_id} has been created - ETA: {new_order.ETA}")
-
         self.order_count += 1
-        # print(self.order_count)
-        # TODO: 根据逻辑更新其他订单的ETA
+        self.check_for_order_updates(order_id)
+        self.print_delivered(self.get_delivered())
 
-        self.print_trees()
+    # 检查是否有订单更新
+    def check_for_order_updates(self, order_id):
+        order_list = self.inOrder(self.root)  # in descend priority order
+        if order_list is None:
+            return
 
-    def update_delivered_orders(self):
-        """
-        检查已送达的订单并更新状态
-        """
-        current_time = self.current_time
-        delivered_orders = []
-
-        # 遍历订单按ETA排序的AVL树
-        for eta in self.orders_by_eta.preOrder(self._root_eta):
-            if eta > current_time:
-                # 如果订单的ETA大于当前时间，跳出循环
+        index = 0
+        # find the index of order_id
+        for index, order in enumerate(order_list):
+            if order.order_id == order_id:
                 break
-            # 获取订单
-            order = self.orders_by_eta.search(self._root_eta, eta).data
-            if order.delivered:
-                # 如果订单已送达，继续下一个订单
-                continue
-            # 标记订单为已送达
-            order.delivered = True
-            # 将订单添加到已送达订单列表中
-            delivered_orders.append(order)
 
+        # 更新订单的预计送达时间
+        # update lower priority orders' ETA
+        updated_later_orders = []
+        for next_index in range(index + 1, len(order_list)):
+            order_list[next_index].ETA = order_list[next_index - 1].ETA + \
+                                         order_list[next_index - 1].delivery_time + \
+                                         order_list[next_index].delivery_time
+            updated_later_orders.append(order_list[next_index])
+
+        # 打印更新后的预计送达时间
+        if len(updated_later_orders) != 0:
+            s = "Updated ETAs: ["
+            for j, order in enumerate(updated_later_orders):
+                s += str(order.order_id) + ":" + str(order.ETA)
+                if j != len(updated_later_orders) - 1:  # not last one
+                    s += ","
+            s += "]"
+            print(s)
 
     def cancel_order(self, order_id, current_system_time):
-        # 在AVL树中查找要取消的订单，并从树中移除
-        # 这里假设AVL树的remove方法已经正确实现
-        # 你需要根据order_id从两个AVL树中分别移除订单
-        self._root_pri = self.orders_by_priority.remove(self._root_pri, order_id)
-        self._root_eta = self.orders_by_eta.remove(self._root_eta, order_id)
+        order_delivered = self.get_delivered()
+        order_list = self.inOrder(self.root)
+        found = False
+        key = 0
+        for key, order in enumerate(order_list):
+            if order.order_id == order_id:
+                found = True
+                break
 
-        # TODO: 更新所有具有较低优先级的订单的ETA
-        # 这可能需要遍历AVL树并更新每个节点的ETA
+        if not found:  # order not found
+            print(f"Cannot cancel. Order {order_id}"
+                  f" has already been delivered.")
+        else:
+            # assume found
+            order_departure_moment = order_list[key].ETA -\
+                                     order_list[key].delivery_time
+            if order_departure_moment < current_system_time:
+                print(f"Cannot cancel. Order {order_id} is out for delivery.")
+            else:
+                if key+1 != len(order_list):
+                    updated_order = []
+                # if the cancelled order was the last order
+                # no other order need to be updated
+                    if key == 0:
+                        # if the cancelled order was originally the next order
+                        # and there are at least one order after canceling
 
-        print(f"Order {order_id} has been canceled")
+                        sec_o = key + 1
+                        # decided by the returning time of the delivery agent
+                        # Become new first order
+                        order_list[sec_o].ETA = self.last_delivery_time + \
+                                                self.last_comeback + \
+                                                order_list[sec_o].delivery_time
+                        updated_order.append(order_list[sec_o])
+                        # Update ETA of subsequent orders after second one
+                        for i in range(sec_o + 1, len(order_list)):
+                            order_list[i].ETA = order_list[i - 1].ETA + \
+                                                order_list[i - 1].delivery_time + \
+                                                order_list[i].delivery_time
+                            updated_order.append(order_list[i])
+
+                    else:
+                        # if the cancelled order was not the first order (has order before and after it)
+                        # Connect "the order before canceled one" with "the order after canceled one"
+                        order_list[key+1].ETA = order_list[key-1].ETA + \
+                                                order_list[key-1].delivery_time + \
+                                                order_list[key+1].delivery_time
+                        updated_order.append(order_list[key+1])
+                        # Update ETA of subsequent orders after those two order
+                        connect_two = key+1
+                        for i in range(connect_two + 1, len(order_list)):
+                            order_list[i].ETA = order_list[i - 1].ETA + \
+                                                order_list[i - 1].delivery_time + \
+                                                order_list[i].delivery_time
+                            updated_order.append(order_list[i])
+
+                    print(f"Order {order_id} has been canceled")
+                    if len(updated_order) != 0:
+                        s = "Updated ETAs: ["
+                        for j, order in enumerate(updated_order):
+                            s += str(order.order_id) + ":" + str(order.ETA)
+                            if j != len(updated_order) - 1:  # not last one
+                                s += ","
+                        s += "]"
+                        print(s)
+                    self.root = self.delete(self.root,
+                                            order_list[key].priority)
+        self.print_delivered(order_delivered)
 
     def get_rank_of_order(self, order_id):
-        # 在AVL树中查找order_id对应的订单，并获取其在树中的排名
-        # 这里假设AVL树的rank方法已经正确实现
-        # 你需要根据order_id从优先级AVL树中找到订单并获取其排名
-        rank = self.orders_by_priority.rank(self._root_pri, order_id)
-        print(f"Order {order_id} will be delivered after {rank} orders")
+        # Count how many orders before order_id
+        order_list = self.inOrder(self.root)
+        count = 0
+        for count, order in enumerate(order_list):
+            if order.order_id == order_id:
+                print(f"Order {order_id} will be delivered"
+                      f" after {count} orders.")
+                break
+        return count
 
     def update_time(self, order_id, current_system_time, new_delivery_time):
-        # 在AVL树中查找要更新时间的订单，并根据新的delivery_time更新ETA
-        # 这里假设AVL树的search方法已经正确实现
-        # 你需要根据order_id从两个AVL树中分别找到订单并更新ETA
-        # 更新ETA后，你可能需要重新平衡AVL树
-        self.orders_by_priority.remove(self._root_pri, order_id)
-        self.orders_by_eta.remove(self._root_eta, order_id)
+        order_delivered = self.get_delivered()
+        order_list = self.inOrder(self.root)
+        found = False
+        key = 0
+        for key, order in enumerate(order_list):
+            if order.order_id == order_id:
+                found = True
+                break
 
-        # 更新delivery_time
-        order = self.orders_by_priority.search(self._root_pri, order_id)
-        order.delivery_time = new_delivery_time
-        order.ETA = current_system_time + new_delivery_time
+        if not found:  # order not found
+            print(f"Cannot update. Order {order_id}"
+                  f" has already been delivered.")
+        else:
+            order_departure_moment = order_list[key].ETA - \
+                                     order_list[key].delivery_time
+            if order_departure_moment <= current_system_time:
+                print(f"Cannot update. Order {order_id} is out for delivery.")
+            else:
+                dif = new_delivery_time - order_list[key].delivery_time
+                order_list[key].delivery_time = new_delivery_time
+                order_list[key].ETA += dif
 
-        # 重新插入订单并更新树的根节点
-        self._root_pri = self.orders_by_priority.insert(self._root_pri, order.priority)
-        self._root_eta = self.orders_by_eta.insert(self._root_eta, order.ETA)
+                for i in range(key+1, len(order_list)):
+                    order_list[i].ETA += 2 * dif
 
-        print(f"Updated ETAs: [{order_id}: {order.ETA}]")
+                s = "Updated ETAs: ["
+                while key < len(order_list):
+                    s += str(order_list[key].order_id) + ":" \
+                         + str(order_list[key].ETA)
+                    if key != len(order_list) - 1:
+                        s += ","
+                    key += 1
+                s += "]"
+                print(s)
+
+        self.print_delivered(order_delivered)
 
     def print_trees(self):
         print("\n==============================")
         print(">>> Priority Tree:")
-        self.orders_by_priority.preOrder(self._root_pri)
-        print()
-        self.orders_by_priority.printHelper(self._root_pri, "", True)
+        # print(self.priority_tree)
 
-        print(">>> ETA Tree:")
-        self.orders_by_eta.preOrder(self._root_eta)
+        self.preOrder(self.root)
+        self.inOrder(self.root)
         print()
-        self.orders_by_eta.printHelper(self._root_eta, "", True)
+        self.printHelper(self.root, "", True)
+
         print("==============================\n")
 
-    def print_orders_within_time(self, time1, time2):
-        # 打印在给定时间范围内的订单
-        orders_within_time = []
+    def print_within_time(self, **kwargs):
+        time1 = None
+        time2 = None
 
-        # 在ETA AVL树中查找所有ETA位于给定时间范围内的订单
-        self.find_orders_within_time(self._root_eta, time1, time2, orders_within_time)
+        for key in kwargs:
+            if key == "order_id":
+                node_list = self.get_path(self.root, kwargs[key])
+                print(f"[{node_list[0].order_id},"
+                      f" {node_list[0].current_system_time},"
+                      f" {node_list[0].orderValue},"
+                      f" {node_list[0].deliveryTime},"
+                      f" {node_list[0].ETA} ]")
+                return
+            if key == "time1":
+                time1 = kwargs[key]
+            if key == "time2":
+                time2 = kwargs[key]
 
-        if orders_within_time:
-            print("Orders to be delivered within the given time range:")
-            print(orders_within_time)
-        else:
+        # Print all orders that will be delivered within the period
+        order_list = self.inOrder(self.root)
+        result = []
+        if order_list is not None:
+            for order in order_list:
+                if time1 <= order.ETA <= time2:
+                    result.append(order)
+        if len(result) == 0:
             print("There are no orders in that time period")
+        else:
+            out = "["
+            for key, order in enumerate(result):
+                out += str(order.order_id)
+                if key != len(result) - 1:  # not last one
+                    out += ","
+            out += "]"
+            print(out)
 
-    def find_orders_within_time(self, root, time1, time2, orders_within_time):
-        # 递归遍历ETA AVL树，查找在给定时间范围内的订单
-        if root is None:
+    def get_delivered(self):
+        # get the order that has been delivered
+        order_list = self.inOrder(self.root)
+        if order_list is None:
+            # nothing in tree
             return
+        delivered_list = []
+        for order in order_list:
+            if order.ETA <= self.current_time:
+                delivered_list.append(order)
+                # self.last_delivery_time = order.ETA
+                # self.last_comeback = self.delivery_time
+                self.root = self.delete(self.root, order.priority)
+            else:
+                break
+        return delivered_list
 
-        if time1 <= root.val <= time2:
-            order = self.orders_by_eta.search(root, root.val)
-            if order is not None and order.val > self.current_time:
-                orders_within_time.append(order.order_id)
+    def print_delivered(self, delivered_list=None):
+        # print the delivered order
+        if delivered_list is None:
+            return
+            # do nothing
+        else:
+            for order in delivered_list:
+                print(f"Order {order.order_id} has been delivered at time "
+                      f"{order.ETA}")
 
-        if root.val >= time1:
-            self.find_orders_within_time(root.left, time1, time2, orders_within_time)
+    def quit(self, tmp_list=None):
+        if tmp_list is None:
+            tmp_list = []
+        self.inOrder(self.root, tmp_list)
+        for order in range(len(tmp_list)):
+            print(f"Order {tmp_list[order].order_id} "
+                  f"has been delivered at time {tmp_list[order].ETA}")
 
-        if root.val <= time2:
-            self.find_orders_within_time(root.right, time1, time2, orders_within_time)
+    def delete(self, root, priority):
+
+        # Step 1 - Perform standard BST delete
+        if not root:
+            return root
+
+        elif priority < root.priority:
+            root.left = self.delete(root.left, priority)
+
+        elif priority > root.priority:
+            root.right = self.delete(root.right, priority)
+
+        else:
+            if root.left is None:
+                return root.right
+
+            if root.right is None:
+                return root.left
+
+            tmp_root = self.getMinValueNode(root.right)
+            root.priority = tmp_root.priority
+            root.order_id = tmp_root.order_id
+            root.current_system_time = tmp_root.current_system_time
+            root.order_value = tmp_root.order_value
+            root.delivery_time = tmp_root.delivery_time
+            root.ETA = tmp_root.ETA
+            root.right = self.delete(root.right,
+                                     tmp_root.priority)
+
+        # If the tree has only one node,
+        # simply return it
+        if root is None:
+            return root
+
+        # Step 2 - Update the height of the
+        # ancestor node
+        root.height = 1 + max(self.getHeight(root.left),
+                              self.getHeight(root.right))
+
+        # Step 3 - Get the balance factor
+        balance = self.getBalance(root)
+
+        # Step 4 - If the node is unbalanced,
+        # then try out the 4 cases
+        # Case 1 - Left Left
+        if balance > 1 and self.getBalance(root.left) >= 0:
+            return self.rightRotate(root)
+
+        # Case 2 - Right Right
+        if balance < -1 and self.getBalance(root.right) <= 0:
+            return self.leftRotate(root)
+
+        # Case 3 - Left Right
+        if balance > 1 and self.getBalance(root.left) < 0:
+            root.left = self.leftRotate(root.left)
+            return self.rightRotate(root)
+
+        # Case 4 - Right Left
+        if balance < -1 and self.getBalance(root.right) > 0:
+            root.right = self.rightRotate(root.right)
+            return self.leftRotate(root)
+
+        return root
 
 
-# Example usage:
-oms = OrderManagementSystem()
+def test():
+    # Example usage:
+    oms = OrderManagementSystem()
 
-# Creating orders
-oms.create_order(1001, 1, 100, 4)
-oms.create_order(1002, 2, 150, 7)
-oms.create_order(1003, 8, 50, 2)
-oms.print_orders_within_time(2, 15)
-oms.create_order(1004, 9, 300, 12)
+    # Testcase 1
+    # oms.create_order(1001, 1, 100, 4)
+    # oms.create_order(1002, 2, 150, 7)
+    # oms.create_order(1003, 8, 50, 2)
+    # oms.print_within_time(2, 15)
+    # oms.create_order(1004, 9, 300, 12)
+    # oms.get_rank_of_order(1004)
+    # oms.print_within_time(45, 55)
+    # oms.create_order(1005, 15, 400, 8)
+    # oms.create_order(1006, 17, 100, 3)
+    # oms.cancel_order(1005, 18)
+    # oms.get_rank_of_order(1004)
+    # oms.create_order(1007, 19, 600, 7)
+    # oms.create_order(1008, 25, 200, 8)
+    # oms.update_time(1007, 27, 12)
+    # oms.get_rank_of_order(1006)
+    # oms.print_within_time(55, 85)
+    # oms.create_order(1009, 36, 500, 15)
+    # oms.create_order(1010, 40, 250, 10)
+    # oms.quit()
 
-oms.print_orders_within_time(45, 55)
+    # Example 1
+    oms.create_order(1001, 1, 200, 3)
+    oms.create_order(1002, 3, 250, 6)
+    oms.create_order(1003, 8, 100, 3)
+    oms.create_order(1004, 13, 100, 5)
+    oms.print_within_time(time1=2, time2=15)
+    oms.update_time(1003, 15, 1)
+    oms.create_order(1005, 30, 300, 3)
+    oms.quit()
 
 
+def read_file(file_path):
+    with open(file_path, 'r') as file:
+        content = file.readlines()
+    return content
 
-# Cancelling an order
-# oms.cancel_order(1, 3)
 
-# Updating delivery time of an order
-# oms.updateTime(2, 4, 3)
+def _extract_numbers(text: str):
+    numbers = re.findall(r'\d+', text)
+    return list(map(int, numbers))
 
-# Printing order details
-# oms.printOrder(2)
 
-# Printing orders within a time range
-# oms.printOrdersWithinTime(2, 5)
+def content_switch(content: list):
+    oms = OrderManagementSystem()
+    for line in content:
+        line = line.lower()
+        args = _extract_numbers(line)
 
-# Getting rank of an order
-# oms.getRankOfOrder(2)
+        if "createorder" in line:
+            oms.create_order(args[0], args[1], args[2], args[3])
+
+        elif "print" in line and len(args) == 2:
+            oms.print_within_time(time1=args[0], time2=args[1])
+
+        elif "print" in line and len(args) == 1:
+            oms.print_within_time(order_id=args[0])
+
+        elif "getrankoforder" in line:
+            oms.get_rank_of_order(args[0])
+
+        elif "cancelorder" in line:
+            oms.cancel_order(args[0], args[1])
+
+        elif "updatetime" in line:
+            oms.update_time(args[0], args[1], args[2])
+
+        elif "quit" in line:
+            oms.quit()
+        else:
+            print(f"Function not found: {line}")
+            exit(1)
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description='Read contents of a text file.')
+    parser.add_argument('file', metavar='FILE',
+                        type=str, help='Path to the text file')
+
+    args = parser.parse_args()
+    file_content = read_file(args.file)
+    output_file = f"{args.file[:-4]}_output_file.txt"
+    with open(output_file, 'w') as sys.stdout:
+        content_switch(file_content)
+
+
+if __name__ == "__main__":
+    main()
